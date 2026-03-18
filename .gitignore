@@ -1,0 +1,4 @@
+images/*.svg
+.DS_Store
+*.pyc
+.idea/
