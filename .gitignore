@@ -3,3 +3,4 @@ images/*.svg
 *.pyc
 .idea/
 results/tb_runs/
+results/models/

@@ -2,6 +2,7 @@
 Train a GNN to predict product category from bag-of-words features and co-purchase information.
 """
 import datetime
+import os
 from pathlib import Path
 
 import numpy as np
@@ -11,14 +12,19 @@ from torch.utils.tensorboard import SummaryWriter
 
 from recommend_gnn.utils import set_safe_globals
 from recommend_gnn.model import SageGNN
-from recommend_gnn.train import train, test, write_progress
+from recommend_gnn.train import train_step, evaluate_model, write_progress, make_splits, save_model
 
 # params
 DATA_FILE = Path("/Users/mathis/Code/github/recommend_gnn/data/obgn_products_subset10000.pt")
 N_HIDDEN = 128
 DEPTH = 2
-N_EPOCHS = 2000
+N_EPOCHS = 1000
+VAL_FRAC = 0.2
 TEST_FRAC = 0.2
+SAGE_AGGREGATE = "mean"
+SAGE_PROJECT = False
+JK_AGGREGATE = "cat"
+DROPOUT_RATE = 0.5
 OUTPUT = Path("/Users/mathis/Code/github/recommend_gnn/results")
 TB_OUTPUT = Path("/Users/mathis/Code/github/recommend_gnn/results/tb_runs")
 
@@ -36,50 +42,86 @@ print(f"Product classes: {n_classes}")
 y_true = torch.squeeze(data.y)
 
 # make train mask
-i_all_shuffled = np.random.permutation(n_nodes)
-n_train = int(n_nodes * (1 - TEST_FRAC))
-i_train = i_all_shuffled[:n_train]
-i_test = i_all_shuffled[n_train:]
+selections = make_splits(n_nodes, val_frac=VAL_FRAC, test_frac=TEST_FRAC)
 
 # make model
 model = SageGNN(
     n_features=n_features,
     n_hidden=N_HIDDEN,
     depth=DEPTH,
-    sage_aggregate="mean",
-    jk_aggregate="cat",
+    sage_aggregate=SAGE_AGGREGATE,
+    jk_aggregate=JK_AGGREGATE,
     dropout_rate=0.5,
     n_out=n_classes,
+    sage_project=SAGE_PROJECT,
 )
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = Adam(model.parameters())
 
-log_dir = TB_OUTPUT / f"{datetime.datetime.now()}"
+# model output
+id_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+print(f"ID: {id_str}")
+model_dir = OUTPUT / "models" / id_str
+os.makedirs(model_dir)
+
+# prepare tensorboard
+log_dir = TB_OUTPUT / id_str
 writer = SummaryWriter(str(log_dir))
+hyper_params = {
+    "n_hidden": N_HIDDEN,
+    "depth": DEPTH,
+    "sage_aggregate": SAGE_AGGREGATE,
+    "sage_project": SAGE_PROJECT,
+    "jk_aggregate": JK_AGGREGATE,
+    "val_fraction": VAL_FRAC,
+    "test_fraction": TEST_FRAC,
+}
 
 # train
+best_loss = 100
 for i_epoch in range(N_EPOCHS):
-    train_loss = train(
+    train_loss = train_step(
         model=model,
         optimizer=optimizer,
         data=data,
-        i_train=i_train,
+        i_train=selections["train"],
         y_true=y_true,
         loss_fn=loss_fn,
     )
-    metrics = test(
+    metrics = evaluate_model(
         model=model,
         data=data,
-        i_train=i_train,
-        i_test=i_test,
+        selections={"train": selections["train"], "val": selections["val"]},
         loss_fn=loss_fn,
         y_true=y_true,
     )
+    metrics["train_loss"] = train_loss
     write_progress(
         writer=writer,
         i_epoch=i_epoch,
-        train_loss=train_loss,
         metrics=metrics,
     )
-    print(f"{i_epoch}: {train_loss=:.3f}, test_loss={metrics['test_loss']:.3f}")
+    print(f"{i_epoch}: {train_loss=:.3f}, val_loss={metrics['val_loss']:.3f}")
+    if metrics["val_loss"] < best_loss:
+        print("Best validation loss yet.")
+        file_path = model_dir / "best_val.pt"
+        save_model(model, hyper_params, file_path, i_epoch=i_epoch, **metrics)
+        best_loss = metrics["val_loss"]
+
+# final evaluation
+with torch.no_grad():
+    test_metrics = evaluate_model(
+        model=model,
+        selections={"test": selections["test"]},
+        data=data,
+        loss_fn=loss_fn,
+        y_true=y_true,
+    )
+    file_path = model_dir / "final.pt"
+    save_model(model, hyper_params, file_path, **test_metrics)
+    print(f"Test accuracy: {test_metrics['test_accuracy']:.3f}")
+    writer.add_hparams(
+        hparam_dict=hyper_params,
+        metric_dict=test_metrics,
+    )
 

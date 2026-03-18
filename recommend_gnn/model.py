@@ -15,6 +15,7 @@ class SageGNN(nn.Module):
             n_out: int,
             depth: int,
             sage_aggregate: str,
+            sage_project: bool,
             jk_aggregate: str,
             dropout_rate: float,
     ) -> None:
@@ -25,14 +26,17 @@ class SageGNN(nn.Module):
         layers = []
         for i_layer in range(depth):
             if i_layer == 0:
-                conv = SAGEConv(n_features, n_hidden, aggr=sage_aggregate)
+                conv = SAGEConv(n_features, n_hidden, aggr=sage_aggregate, project=sage_project)
             else:
-                conv = SAGEConv(n_hidden, n_hidden, aggr=sage_aggregate)
+                conv = SAGEConv(n_hidden, n_hidden, aggr=sage_aggregate, project=sage_project)
             layers.append(conv)
         layers = nn.ModuleList(layers)
         self.conv_layers = layers
 
-        self.jk = JumpingKnowledge(mode=jk_aggregate)
+        if jk_aggregate == "lstm":
+            self.jk = JumpingKnowledge(mode=jk_aggregate, channels=n_hidden, num_layers=1)
+        else:
+            self.jk = JumpingKnowledge(mode=jk_aggregate)
         if jk_aggregate == "cat":
             n_jk = int(len(layers) * n_hidden)
         else:
