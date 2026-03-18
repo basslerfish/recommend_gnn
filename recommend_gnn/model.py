@@ -47,7 +47,6 @@ class SageGNN(nn.Module):
             self,
             x: torch.Tensor,
             edge_index: torch.Tensor,
-            return_embed: bool = False,
     ) -> torch.Tensor:
         """Compute either embeddings or class predictions (not softmaxed)"""
         intermediates = []
@@ -57,11 +56,36 @@ class SageGNN(nn.Module):
             x = torch.dropout(x, p=self.dropout_rate, train=self.training)
             intermediates.append(x)
         x = self.jk(intermediates)
-        if return_embed:
+        x = self.fc1(x)
+        return x
+
+    def get_embeddings(
+            self,
+            x: torch.Tensor,
+            edge_index: torch.Tensor,
+            depth_from_surface: int = 0,
+    ) -> torch.Tensor:
+        n_total = len(self.conv_layers) + 2
+        current_depth = n_total
+        intermediates = []
+        for conv in self.conv_layers:
+            x = conv(x, edge_index)
+            x = torch.relu(x)
+            x = torch.dropout(x, p=self.dropout_rate, train=self.training)
+            intermediates.append(x)
+            current_depth -= 1
+            if current_depth == depth_from_surface:
+                return x
+        x = self.jk(intermediates)
+        current_depth -= 1
+        if current_depth == depth_from_surface:
+            return x
+        x = self.fc1(x)
+        current_depth -= 1
+        if current_depth == depth_from_surface:
             return x
         else:
-            x = self.fc1(x)
-            return x
+            raise ValueError()
 
 
 

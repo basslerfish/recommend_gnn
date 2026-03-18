@@ -3,3 +3,6 @@ torch_geometric
 scikit-learn
 tensorboard
 setuptools==81
+matplotlib
+umap-learn
+pandas

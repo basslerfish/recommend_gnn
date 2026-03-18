@@ -4,3 +4,4 @@ images/*.svg
 .idea/
 results/tb_runs/
 results/models/
+results/pca.png
