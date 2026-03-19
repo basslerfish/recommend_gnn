@@ -91,9 +91,5 @@ class SageGNN(nn.Module):
         current_depth -= 1
         if current_depth == depth_from_surface:
             return x
-        else:
-            raise ValueError()
-
-
-
+        raise ValueError(f"{depth_from_surface=} invalid")
 

@@ -5,3 +5,4 @@ images/*.svg
 images/hidden/
 results/hidden/
 data/hidden/
+*egg-info/

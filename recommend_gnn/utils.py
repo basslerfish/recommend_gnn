@@ -1,3 +1,4 @@
+"""Miscellaneous utility functions."""
 import torch
 from torch_geometric.data.data import GlobalStorage, DataEdgeAttr, DataTensorAttr
 

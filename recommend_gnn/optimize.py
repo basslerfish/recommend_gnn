@@ -36,6 +36,10 @@ def train_and_val(
         n_epochs: int,
         trial: optuna.Trial,
 ) -> float:
+    """
+    Train model and return validation loss.
+    Use in conjunction with optuna's hyperparameter tuning.
+    """
     best_loss = 100.0
     for i_epoch in range(n_epochs):
         train_loss = train_step(
