@@ -6,3 +6,4 @@ results/tb_runs/
 results/models/
 results/pca.png
 results/hyperparams
+data/obgn_products_subset20000.pt

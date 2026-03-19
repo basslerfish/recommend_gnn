@@ -17,13 +17,17 @@ from recommend_gnn.train import make_splits
 
 # params
 N_TRIALS = 100
-N_STARTUP_TRIALS = 10
 DATA_FILE = Path("/Users/mathis/Code/github/recommend_gnn/data/obgn_products_subset10000.pt")
 OUTPUT_DIR = Path("/Users/mathis/Code/github/recommend_gnn/results/hyperparams")
+STUDY_PREFIX = "optimize_gnn"
 VAL_FRAC = 0.2
 TEST_FRAC = 0.2
-N_EPOCHS = 200
-N_JOBS = 4
+N_EPOCHS = 300
+N_JOBS = 2
+
+PRUNER = "hyperband"  # median or hyperband
+N_WARMUP_STEPS = 100
+N_STARTUP_TRIALS = 10
 
 # load data
 print("---Loading data---")
@@ -37,11 +41,13 @@ splits = make_splits(n_nodes, val_frac=VAL_FRAC, test_frac=TEST_FRAC)
 # funcs
 def objective(trial: optuna.trial.Trial) -> float:
     """Minimize val_loss across a range of hyperparameters."""
-    n_hidden = trial.suggest_int("n_hidden", 32, 512, step=32)
+    n_hidden = trial.suggest_int("n_hidden", 128, 512, step=64)
     depth = trial.suggest_int("depth", 2, 4)
-    dropout_rate = trial.suggest_float("dropout_rate", 0, 0.8, step=0.1)
+    dropout_rate = trial.suggest_float("dropout_rate", 0.2, 0.7, step=0.1)
     sage_aggregate = trial.suggest_categorical("sage_aggregate", ["mean", "max"])
     jk_aggregate = trial.suggest_categorical("jk_aggregate", ["max", "cat"])
+    sage_project = trial.suggest_categorical("sage_project", choices=[False, True])
+    dropout_last = trial.suggest_categorical("dropout_last", [False, True])
     model = SageGNN(
         n_features=n_features,
         n_hidden=n_hidden,
@@ -50,7 +56,8 @@ def objective(trial: optuna.trial.Trial) -> float:
         sage_aggregate=sage_aggregate,
         jk_aggregate=jk_aggregate,
         n_out=n_classes,
-        sage_project=False,
+        sage_project=sage_project,
+        dropout_last=dropout_last,
     )
     loss_fn = CrossEntropyLoss()
     optimizer = Adam(model.parameters())
@@ -82,12 +89,19 @@ storage = f"sqlite:////{OUTPUT_DIR}/hyperparams.db"
 sampler = optuna.samplers.TPESampler(
     n_startup_trials=N_STARTUP_TRIALS,
 )
-pruner = optuna.pruners.MedianPruner(
-    n_warmup_steps=25,
-    n_startup_trials=N_STARTUP_TRIALS,
-)
+if PRUNER == "median":
+    pruner = optuna.pruners.MedianPruner(
+        n_warmup_steps=N_WARMUP_STEPS,
+        n_startup_trials=N_STARTUP_TRIALS,
+    )
+elif PRUNER == "hyperband":
+    pruner = optuna.pruners.HyperbandPruner()
+else:
+    raise ValueError(f"{PRUNER=} unknown")
+
+study_name = f"{STUDY_PREFIX}_samples{n_nodes}_pruner{PRUNER}"
 study = optuna.create_study(
-    study_name="optimize_gnn",
+    study_name=study_name,
     direction="minimize",
     storage=storage,
     load_if_exists=True,

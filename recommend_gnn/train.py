@@ -40,9 +40,9 @@ def train_step(
         data: Data,
         loss_fn: nn.Module,
         i_train: torch.Tensor | np.ndarray,
-        y_true: torch.Tensor,
 ) -> float:
     """Single training iteration."""
+    y_true = torch.squeeze(data.y)
     model.train()
     optimizer.zero_grad()
     y_pred = model(data.x, data.edge_index)
@@ -55,20 +55,20 @@ def train_step(
 def evaluate_model(
         model: nn.Module,
         data: Data,
-        y_true: torch.Tensor,
         loss_fn: nn.Module,
-        selections: dict[int, np.ndarray],
+        splits: dict[int, np.ndarray],
 ) -> dict[str, float]:
     """Evaluate model."""
     model.eval()
     y_pred = model(data.x, data.edge_index)
+    y_true = torch.squeeze(data.y)
     metrics = {}
 
     # loss
-    for sel_name, i_sel in selections.items():
-        sel_loss = loss_fn(y_pred[i_sel, :], y_true[i_sel])
+    for split_name, i_split in splits.items():
+        sel_loss = loss_fn(y_pred[i_split, :], y_true[i_split])
         sel_loss = sel_loss.item()
-        metrics[f"{sel_name}_loss"] = sel_loss
+        metrics[f"{split_name}_loss"] = sel_loss
 
     # other metrics (sklearn-based)
     y_pred = y_pred.detach().numpy()
@@ -79,10 +79,10 @@ def evaluate_model(
         "accuracy": accuracy_score,
         "f1": partial(f1_score, average="weighted"),
     }
-    for sel_name, index_vec in selections.items():
+    for split_name, i_split in splits.items():
         for score_name, func in functions.items():
-            score = func(y_true_np[index_vec], pred_index[index_vec])
-            metrics[f"{sel_name}_{score_name}"] = score
+            score = func(y_true_np[i_split], pred_index[i_split])
+            metrics[f"{split_name}_{score_name}"] = score
     return metrics
 
 

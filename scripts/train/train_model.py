@@ -1,5 +1,6 @@
 """
 Train a GNN to predict product category from bag-of-words features and co-purchase information.
+Manual setting of hyperparameters required in this version.
 """
 import datetime
 import os
@@ -14,19 +15,22 @@ from recommend_gnn.utils import set_safe_globals
 from recommend_gnn.model import SageGNN
 from recommend_gnn.train import train_step, evaluate_model, write_progress, make_splits, save_model
 
-# params
+# paths
 DATA_FILE = Path("/Users/mathis/Code/github/recommend_gnn/data/obgn_products_subset10000.pt")
+OUTPUT = Path("/Users/mathis/Code/github/recommend_gnn/results")
+TB_OUTPUT = Path("/Users/mathis/Code/github/recommend_gnn/results/tb_runs")
+
+# hyperparams
 N_HIDDEN = 128
 DEPTH = 2
-N_EPOCHS = 1000
+N_EPOCHS = 500
 VAL_FRAC = 0.2
 TEST_FRAC = 0.2
 SAGE_AGGREGATE = "mean"
 SAGE_PROJECT = False
 JK_AGGREGATE = "cat"
 DROPOUT_RATE = 0.5
-OUTPUT = Path("/Users/mathis/Code/github/recommend_gnn/results")
-TB_OUTPUT = Path("/Users/mathis/Code/github/recommend_gnn/results/tb_runs")
+DROPOUT_LAST = True
 
 # load data
 set_safe_globals()
@@ -38,11 +42,8 @@ print(f"Features per node: {n_features}")
 n_classes = np.unique(data.y).size
 print(f"Product classes: {n_classes}")
 
-# format labels
-y_true = torch.squeeze(data.y)
-
 # make train mask
-selections = make_splits(n_nodes, val_frac=VAL_FRAC, test_frac=TEST_FRAC)
+splits = make_splits(n_nodes, val_frac=VAL_FRAC, test_frac=TEST_FRAC)
 
 # make model
 model = SageGNN(
@@ -54,12 +55,14 @@ model = SageGNN(
     dropout_rate=0.5,
     n_out=n_classes,
     sage_project=SAGE_PROJECT,
+    dropout_last=DROPOUT_LAST,
 )
 loss_fn = torch.nn.CrossEntropyLoss()
 optimizer = Adam(model.parameters())
 
 # model output
 id_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+id_str = f"{n_nodes}_{id_str}"
 print(f"ID: {id_str}")
 model_dir = OUTPUT / "models" / id_str
 os.makedirs(model_dir)
@@ -84,16 +87,14 @@ for i_epoch in range(N_EPOCHS):
         model=model,
         optimizer=optimizer,
         data=data,
-        i_train=selections["train"],
-        y_true=y_true,
+        i_train=splits["train"],
         loss_fn=loss_fn,
     )
     metrics = evaluate_model(
         model=model,
         data=data,
-        selections={"train": selections["train"], "val": selections["val"]},
+        splits={"train": splits["train"], "val": splits["val"]},
         loss_fn=loss_fn,
-        y_true=y_true,
     )
     metrics["train_loss"] = train_loss
     write_progress(
@@ -112,10 +113,9 @@ for i_epoch in range(N_EPOCHS):
 with torch.no_grad():
     test_metrics = evaluate_model(
         model=model,
-        selections={"test": selections["test"]},
+        splits={"test": splits["test"]},
         data=data,
         loss_fn=loss_fn,
-        y_true=y_true,
     )
     file_path = model_dir / "final.pt"
     save_model(model, hyper_params, file_path, **test_metrics)

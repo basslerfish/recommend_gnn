@@ -16,10 +16,10 @@ def get_val_loss(
         loss_fn: nn.Module,
         data: Data,
         i_val: np.ndarray,
-        y_true: torch.Tensor,
 ) -> float:
     """Basic validation loss."""
     model.eval()
+    y_true = torch.squeeze(data.y)
     y_pred = model(data.x, data.edge_index)
     val_loss = loss_fn(y_pred[i_val, :], y_true[i_val])
     val_loss = val_loss.item()
@@ -36,7 +36,6 @@ def train_and_val(
         n_epochs: int,
         trial: optuna.Trial,
 ) -> float:
-    y_true = torch.squeeze(data.y)
     best_loss = 100.0
     for i_epoch in range(n_epochs):
         train_loss = train_step(
@@ -45,12 +44,10 @@ def train_and_val(
             data=data,
             loss_fn=loss_fn,
             i_train=i_train,
-            y_true=y_true,
         )
         val_loss = get_val_loss(
             model=model,
             i_val=i_val,
-            y_true=y_true,
             data=data,
             loss_fn=loss_fn,
         )

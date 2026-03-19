@@ -18,9 +18,11 @@ class SageGNN(nn.Module):
             sage_project: bool,
             jk_aggregate: str,
             dropout_rate: float,
+            dropout_last: bool,
     ) -> None:
         super().__init__()
         self.dropout_rate = dropout_rate
+        self.dropout_last = dropout_last
 
         # make conv layers
         layers = []
@@ -48,7 +50,7 @@ class SageGNN(nn.Module):
             x: torch.Tensor,
             edge_index: torch.Tensor,
     ) -> torch.Tensor:
-        """Compute either embeddings or class predictions (not softmaxed)"""
+        """Compute class predictions (not softmaxed)"""
         intermediates = []
         for conv in self.conv_layers:
             x = conv(x, edge_index)
@@ -56,6 +58,8 @@ class SageGNN(nn.Module):
             x = torch.dropout(x, p=self.dropout_rate, train=self.training)
             intermediates.append(x)
         x = self.jk(intermediates)
+        if self.dropout_last:
+            x = torch.dropout(x, p=self.dropout_rate, train=self.training)
         x = self.fc1(x)
         return x
 
@@ -65,13 +69,16 @@ class SageGNN(nn.Module):
             edge_index: torch.Tensor,
             depth_from_surface: int = 0,
     ) -> torch.Tensor:
+        """
+        Get embeddings, that is, intermediate representations.
+        No dropout.
+        """
         n_total = len(self.conv_layers) + 2
         current_depth = n_total
         intermediates = []
         for conv in self.conv_layers:
             x = conv(x, edge_index)
             x = torch.relu(x)
-            x = torch.dropout(x, p=self.dropout_rate, train=self.training)
             intermediates.append(x)
             current_depth -= 1
             if current_depth == depth_from_surface:
