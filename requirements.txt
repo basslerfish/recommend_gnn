@@ -6,3 +6,5 @@ setuptools==81
 matplotlib
 umap-learn
 pandas
+optuna
+optuna-dashboard
