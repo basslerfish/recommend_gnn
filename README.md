@@ -14,7 +14,7 @@ Use a Graph Neural Network (GNN) to recommend products from the obgn-products da
 - Optionally use hyperparameter tuning (`optuna`) to find best model parameters (`scripts/optimize_hyperparams.py`, `scripts/train_best.py`)
 - Run `scripts/main.py` to get product recommendations given a product IDX
 
-**How to run***
+**How to run**
 - Clone repository
 - Easiest is to use docker:
   - `docker build -t recommend_gnn .`
