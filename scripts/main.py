@@ -21,7 +21,7 @@ BASE_URL = "www.amazon.com/dp/"
 
 def main() -> None:
     # set paths
-    current_dir = Path.cwd().parent
+    current_dir = Path.cwd()
     model_file = current_dir / "results" / "model.pt"
     data_file = current_dir / "data" / "obgn_products_subset10000.pt"
     asin_file = current_dir / "data" / "nodeidx2asin.csv.gz"
@@ -63,6 +63,7 @@ def main() -> None:
 
     # log source product
     save_file = output_dir / "product_recommendations.txt"
+    print(f"Saving product recommendations to {save_file}")
     asin = asin_df.loc[asin_df["node idx"] == PRODUCT_IDX, "asin"].values[0]
     product_url = f"https://{BASE_URL}/{asin}"
     txt = f"Finding recommendations for product {PRODUCT_IDX} ({product_url})"

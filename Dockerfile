@@ -14,13 +14,14 @@ COPY requirements.txt .
 # 5. Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 6. Copy the rest of your application code
-COPY . .
-
-# 7. (Optional) Create a non-root user for security
+# 6. (Optional) Create a non-root user for security
 RUN useradd -m myuser
-USER myuser
+
+# 7. Copy the rest of your application code
+COPY --chown=myuser:myuser . .
+RUN pip install -e .
 
 # 8. Define the command to run your app
 # Replace "main.py" with your actual entry point
+USER myuser
 CMD ["python", "scripts/main.py"]
