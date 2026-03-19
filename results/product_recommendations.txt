@@ -1,0 +1,5 @@
+Finding recommendations for product 123 (https://www.amazon.com/dp//B00BV1P6GK)
+Recommending product 8174 with similarity 0.954: https://www.amazon.com/dp//B00DJQZMSM
+Recommending product 8609 with similarity 0.956: https://www.amazon.com/dp//B004JZE4EK
+Recommending product 5608 with similarity 0.958: https://www.amazon.com/dp//B004PICKDS
+Recommending product 8380 with similarity 0.976: https://www.amazon.com/dp//B005NCDI36

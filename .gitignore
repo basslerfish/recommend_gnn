@@ -2,8 +2,6 @@ images/*.svg
 .DS_Store
 *.pyc
 .idea/
-results/tb_runs/
-results/models/
-results/pca.png
-results/hyperparams
-data/obgn_products_subset20000.pt
+images/hidden/
+results/hidden/
+data/hidden/
