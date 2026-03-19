@@ -14,4 +14,6 @@ Use a Graph Neural Network (GNN) to recommend products from the obgn-products da
 - Optionally use hyperparameter tuning (`optuna`) to find best model parameters (`scripts/optimize_hyperparams.py`, `scripts/train_best.py`)
 - Run `scripts/main.py` to get product recommendations given a product IDX
 
+The dataset this repo relies on (obgn-product) was collected up until 2014.
+Therefore, not all product URLs may link to valid products.
 Inspired by the book "Graph neural networks in Action" by Broadwater and Stillman (https://github.com/keitabroadwater/gnns_in_action/).

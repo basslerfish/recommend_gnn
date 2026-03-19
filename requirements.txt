@@ -1,10 +1,10 @@
-torch
-torch_geometric
+torch==2.10
+torch_geometric==2.7
 scikit-learn
 tensorboard
 setuptools==81
 matplotlib
 umap-learn
 pandas
-optuna
+optuna==4.8
 optuna-dashboard
