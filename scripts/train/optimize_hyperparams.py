@@ -1,5 +1,7 @@
 """
 Use Optuna for Bayesian optimization of model hyperparameters.
+Saves hyperparams.db file which can then be loaded to extract optimal params.
+Afterwards, use train_best.py to train optimal model for extended period.
 """
 from pathlib import Path
 
@@ -17,8 +19,6 @@ from recommend_gnn.train import make_splits
 
 # params
 N_TRIALS = 100
-DATA_FILE = Path("/Users/mathis/Code/github/recommend_gnn/data/obgn_products_subset10000.pt")
-OUTPUT_DIR = Path("/Users/mathis/Code/github/recommend_gnn/results/hyperparams")
 STUDY_PREFIX = "optimize_gnn"
 VAL_FRAC = 0.2
 TEST_FRAC = 0.2
@@ -29,88 +29,98 @@ PRUNER = "hyperband"  # median or hyperband
 N_WARMUP_STEPS = 100
 N_STARTUP_TRIALS = 10
 
-# load data
-print("---Loading data---")
-set_safe_globals()
-data = torch.load(DATA_FILE)
-n_nodes, n_features = data.x.shape
-n_classes = np.unique(data.y).size
-splits = make_splits(n_nodes, val_frac=VAL_FRAC, test_frac=TEST_FRAC)
+
+def main() -> None:
+    # set paths
+    current_dir = Path.cwd().parent
+    data_file = current_dir / "data" / "obgn_products_subset10000.pt"
+    hp_dir = current_dir / "results" / "hidden" / "hyperparams"
+
+    # load data
+    print("---Loading data---")
+    set_safe_globals()
+    data = torch.load(str(data_file))
+    n_nodes, n_features = data.x.shape
+    n_classes = np.unique(data.y).size
+    splits = make_splits(n_nodes, val_frac=VAL_FRAC, test_frac=TEST_FRAC)
 
 
-# funcs
-def objective(trial: optuna.trial.Trial) -> float:
-    """Minimize val_loss across a range of hyperparameters."""
-    n_hidden = trial.suggest_int("n_hidden", 128, 512, step=64)
-    depth = trial.suggest_int("depth", 2, 4)
-    dropout_rate = trial.suggest_float("dropout_rate", 0.2, 0.7, step=0.1)
-    sage_aggregate = trial.suggest_categorical("sage_aggregate", ["mean", "max"])
-    jk_aggregate = trial.suggest_categorical("jk_aggregate", ["max", "cat"])
-    sage_project = trial.suggest_categorical("sage_project", choices=[False, True])
-    dropout_last = trial.suggest_categorical("dropout_last", [False, True])
-    model = SageGNN(
-        n_features=n_features,
-        n_hidden=n_hidden,
-        depth=depth,
-        dropout_rate=dropout_rate,
-        sage_aggregate=sage_aggregate,
-        jk_aggregate=jk_aggregate,
-        n_out=n_classes,
-        sage_project=sage_project,
-        dropout_last=dropout_last,
-    )
-    loss_fn = CrossEntropyLoss()
-    optimizer = Adam(model.parameters())
-    val_loss = train_and_val(
-        model=model,
-        data=data,
-        optimizer=optimizer,
-        loss_fn=loss_fn,
-        i_train=splits["train"],
-        i_val=splits["val"],
-        n_epochs=N_EPOCHS,
-        trial=trial,
-    )
-    return val_loss
+    # funcs
+    def objective(trial: optuna.trial.Trial) -> float:
+        """Minimize val_loss across a range of hyperparameters."""
+        n_hidden = trial.suggest_int("n_hidden", 128, 512, step=64)
+        depth = trial.suggest_int("depth", 2, 4)
+        dropout_rate = trial.suggest_float("dropout_rate", 0.2, 0.7, step=0.1)
+        sage_aggregate = trial.suggest_categorical("sage_aggregate", ["mean", "max"])
+        jk_aggregate = trial.suggest_categorical("jk_aggregate", ["max", "cat"])
+        sage_project = trial.suggest_categorical("sage_project", choices=[False, True])
+        dropout_last = trial.suggest_categorical("dropout_last", [False, True])
+        model = SageGNN(
+            n_features=n_features,
+            n_hidden=n_hidden,
+            depth=depth,
+            dropout_rate=dropout_rate,
+            sage_aggregate=sage_aggregate,
+            jk_aggregate=jk_aggregate,
+            n_out=n_classes,
+            sage_project=sage_project,
+            dropout_last=dropout_last,
+        )
+        loss_fn = CrossEntropyLoss()
+        optimizer = Adam(model.parameters())
+        val_loss = train_and_val(
+            model=model,
+            data=data,
+            optimizer=optimizer,
+            loss_fn=loss_fn,
+            i_train=splits["train"],
+            i_val=splits["val"],
+            n_epochs=N_EPOCHS,
+            trial=trial,
+        )
+        return val_loss
 
 
-def print_callback(study: optuna.Study, frozen_trial: optuna.Trial) -> None:
-    print(f"---Trial: {frozen_trial.number}---")
-    print(f"Val loss: {frozen_trial.value}")
-    if study.best_trial.number == frozen_trial.number:
-        print("=> New best.")
-    for key, val in frozen_trial.params.items():
-        print(f"\t {key}: {val}")
+    def print_callback(study: optuna.Study, frozen_trial: optuna.Trial) -> None:
+        print(f"---Trial: {frozen_trial.number}---")
+        print(f"Val loss: {frozen_trial.value}")
+        if study.best_trial.number == frozen_trial.number:
+            print("=> New best.")
+        for key, val in frozen_trial.params.items():
+            print(f"\t {key}: {val}")
 
 
-# go!
-print("---Run---")
-storage = f"sqlite:////{OUTPUT_DIR}/hyperparams.db"
-sampler = optuna.samplers.TPESampler(
-    n_startup_trials=N_STARTUP_TRIALS,
-)
-if PRUNER == "median":
-    pruner = optuna.pruners.MedianPruner(
-        n_warmup_steps=N_WARMUP_STEPS,
+    # go!
+    print("---Run---")
+    storage = f"sqlite:////{hp_dir}/hyperparams.db"
+    sampler = optuna.samplers.TPESampler(
         n_startup_trials=N_STARTUP_TRIALS,
     )
-elif PRUNER == "hyperband":
-    pruner = optuna.pruners.HyperbandPruner()
-else:
-    raise ValueError(f"{PRUNER=} unknown")
+    if PRUNER == "median":
+        pruner = optuna.pruners.MedianPruner(
+            n_warmup_steps=N_WARMUP_STEPS,
+            n_startup_trials=N_STARTUP_TRIALS,
+        )
+    elif PRUNER == "hyperband":
+        pruner = optuna.pruners.HyperbandPruner()
+    else:
+        raise ValueError(f"{PRUNER=} unknown")
 
-study_name = f"{STUDY_PREFIX}_samples{n_nodes}_pruner{PRUNER}"
-study = optuna.create_study(
-    study_name=study_name,
-    direction="minimize",
-    storage=storage,
-    load_if_exists=True,
-    sampler=sampler,
-    pruner=pruner,
-)
-study.optimize(
-    func=objective,
-    n_trials=N_TRIALS,
-    callbacks=[print_callback],
-    n_jobs=N_JOBS,
-)
+    study_name = f"{STUDY_PREFIX}_samples{n_nodes}_pruner{PRUNER}"
+    study = optuna.create_study(
+        study_name=study_name,
+        direction="minimize",
+        storage=storage,
+        load_if_exists=True,
+        sampler=sampler,
+        pruner=pruner,
+    )
+    study.optimize(
+        func=objective,
+        n_trials=N_TRIALS,
+        callbacks=[print_callback],
+        n_jobs=N_JOBS,
+    )
+
+if __name__ == "__main__":
+    main()

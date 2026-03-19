@@ -13,10 +13,11 @@ from recommend_gnn.utils import set_safe_globals
 from recommend_gnn.model import SageGNN
 
 
-# other
+# params
 PRODUCT_IDX = 123
 TOP_K = 5
 BASE_URL = "www.amazon.com/dp/"
+
 
 def main() -> None:
     # set paths
